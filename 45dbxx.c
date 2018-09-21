@@ -98,223 +98,212 @@
 #define AT45DB_SR_PROTECT   (1 << 1) /* Bit 1: PROTECT */
 #define AT45DB_SR_PGSIZE    (1 << 0) /* Bit 0: PAGE_SIZE */
 
+#ifdef _45DBXX_HARDWARE_NSS
+#define _45DBXX_CS_SET()
+#define _45DBXX_CS_RESET()
+#else
+#define _45DBXX_CS_SET() HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET)
+#define _45DBXX_CS_RESET() HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET)
+#endif
+
 //################################################################################################################
 
 AT45dbxx_t	AT45dbxx;
 
 //################################################################################################################
-uint8_t	AT45dbxx_Spi(uint8_t	Data)
+uint8_t	AT45dbxx_Spi(uint8_t Data)
 {
-	uint8_t ret=0;
-	HAL_SPI_TransmitReceive(&_45DBXX_SPI,&Data,&ret,1,100);
-	return ret;
+    uint8_t ret=0;
+    HAL_SPI_TransmitReceive(&_45DBXX_SPI,&Data,&ret,1,100);
+    return ret;
 }
 //################################################################################################################
-uint8_t AT45dbxx_ReadStatus(void) 
-{ 
-	uint8_t	status	= 0;
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-  AT45dbxx_Spi(0xd7);
-  status = AT45dbxx_Spi(0x00);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
-	return status; 
+uint8_t AT45dbxx_ReadStatus(void)
+{
+    uint8_t	status	= 0;
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(0xd7);
+    status = AT45dbxx_Spi(0x00);
+    _45DBXX_CS_SET();
+    return status;
 }
 //################################################################################################################
 void AT45dbxx_WaitBusy(void)
 {
-	uint8_t	status;
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-  AT45dbxx_Spi(0xd7);
-  status = AT45dbxx_Spi(0x00);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
-	while((status & 0x80) == 0)
-	{
-		_45DBXX_DELAY(1);
-	  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-		AT45dbxx_Spi(0xd7);
-		status = AT45dbxx_Spi(0x00);
-		HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
-	}
+    uint8_t	status;
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(0xd7);
+    status = AT45dbxx_Spi(0x00);
+    _45DBXX_CS_SET();
+    while((status & 0x80) == 0) {
+        _45DBXX_DELAY(1);
+        _45DBXX_CS_RESET();
+        AT45dbxx_Spi(0xd7);
+        status = AT45dbxx_Spi(0x00);
+        _45DBXX_CS_SET();
+    }
 }
 //################################################################################################################
-void AT45dbxx_Resume(void) 
+void AT45dbxx_Resume(void)
 {
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);	
-	AT45dbxx_Spi(AT45DB_RESUME);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);	
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(AT45DB_RESUME);
+    _45DBXX_CS_SET();
 }
 //################################################################################################################
-void AT45dbxx_PowerDown(void) 
+void AT45dbxx_PowerDown(void)
 {
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);	
-	AT45dbxx_Spi(AT45DB_PWRDOWN);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);	
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(AT45DB_PWRDOWN);
+    _45DBXX_CS_SET();
 }
 //################################################################################################################
-bool		AT45dbxx_Init(void)
+bool AT45dbxx_Init(void)
 {
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);	
-	while(HAL_GetTick() < 20)
-		_45DBXX_DELAY(10);
-	uint8_t Temp0 = 0, Temp1 = 0,Temp2=0;
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);	
-	AT45dbxx_Spi(0x9f);
-	Temp0=AT45dbxx_Spi(0xa5);
-	Temp1=AT45dbxx_Spi(0xa5);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);	
-	Temp2=AT45dbxx_ReadStatus();
-	if(Temp0==0x1f)
-	{
-		switch	(Temp1&0x1f)
-		{
-			case 0x03:	//	AT45db021
-				AT45dbxx.FlashSize_MBit = 2;
-				AT45dbxx.Pages = 1024;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;
-					AT45dbxx.PageSize = 256;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 9;
-					AT45dbxx.PageSize = 264;				
-				}
-			break;
-			case 0x04:	//	AT45db041
-				AT45dbxx.FlashSize_MBit = 4;
-				AT45dbxx.Pages = 2048;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;
-					AT45dbxx.PageSize = 256;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 9;
-					AT45dbxx.PageSize = 264;				
-				}
-			break;
-			case 0x05:	//	AT45db081
-				AT45dbxx.FlashSize_MBit = 8;
-				AT45dbxx.Pages = 4096;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;
-					AT45dbxx.PageSize = 256;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 9;
-					AT45dbxx.PageSize = 264;					
-				}
-			break;
-			case 0x06:	//	AT45db161
-				AT45dbxx.FlashSize_MBit = 16;
-				AT45dbxx.Pages = 4096;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;					
-					AT45dbxx.PageSize = 512;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 10;
-					AT45dbxx.PageSize = 528;					
-				}
-			break;
-			case 0x07:	//	AT45db321
-				AT45dbxx.FlashSize_MBit = 32;
-				AT45dbxx.Pages = 8192;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;
-					AT45dbxx.PageSize = 512;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 10;
-					AT45dbxx.PageSize = 528;					
-				}
-			break;
-			case 0x08:	//	AT45db641
-				AT45dbxx.FlashSize_MBit = 64;
-				AT45dbxx.Pages = 8192;
-				if(Temp2&0x01)
-				{
-					AT45dbxx.Shift = 0;
-					AT45dbxx.PageSize = 1024;				
-				}
-				else
-				{
-					AT45dbxx.Shift = 11;
-					AT45dbxx.PageSize = 1056;				
-				}
-			break;			
-		}			
-		
-		return true;
-	}
-	else
-		return false;	
+    _45DBXX_CS_SET();
+    while(HAL_GetTick() < 20) {
+        _45DBXX_DELAY(10);
+    }
+    uint8_t Temp0 = 0, Temp1 = 0,Temp2=0;
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(0x9f);
+    Temp0=AT45dbxx_Spi(0xa5);
+    Temp1=AT45dbxx_Spi(0xa5);
+    _45DBXX_CS_SET();
+    Temp2=AT45dbxx_ReadStatus();
+    if(Temp0==0x1f) {
+        switch	(Temp1&0x1f) {
+        case 0x03:	//	AT45db021
+            AT45dbxx.FlashSize_MBit = 2;
+            AT45dbxx.Pages = 1024;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 256;
+            } else {
+                AT45dbxx.Shift = 9;
+                AT45dbxx.PageSize = 264;
+            }
+            break;
+        case 0x04:	//	AT45db041
+            AT45dbxx.FlashSize_MBit = 4;
+            AT45dbxx.Pages = 2048;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 256;
+            } else {
+                AT45dbxx.Shift = 9;
+                AT45dbxx.PageSize = 264;
+            }
+            break;
+        case 0x05:	//	AT45db081
+            AT45dbxx.FlashSize_MBit = 8;
+            AT45dbxx.Pages = 4096;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 256;
+            } else {
+                AT45dbxx.Shift = 9;
+                AT45dbxx.PageSize = 264;
+            }
+            break;
+        case 0x06:	//	AT45db161
+            AT45dbxx.FlashSize_MBit = 16;
+            AT45dbxx.Pages = 4096;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 512;
+            } else {
+                AT45dbxx.Shift = 10;
+                AT45dbxx.PageSize = 528;
+            }
+            break;
+        case 0x07:	//	AT45db321
+            AT45dbxx.FlashSize_MBit = 32;
+            AT45dbxx.Pages = 8192;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 512;
+            } else {
+                AT45dbxx.Shift = 10;
+                AT45dbxx.PageSize = 528;
+            }
+            break;
+        case 0x08:	//	AT45db641
+            AT45dbxx.FlashSize_MBit = 64;
+            AT45dbxx.Pages = 8192;
+            if(Temp2&0x01) {
+                AT45dbxx.Shift = 0;
+                AT45dbxx.PageSize = 1024;
+            } else {
+                AT45dbxx.Shift = 11;
+                AT45dbxx.PageSize = 1056;
+            }
+            break;
+        }
+
+        return true;
+    } else {
+        return false;
+    }
 }
 //################################################################################################################
-void 		AT45dbxx_EraseChip(void)
+void AT45dbxx_EraseChip(void)
 {
-	AT45dbxx_Resume();
-	AT45dbxx_WaitBusy();
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-	AT45dbxx_Spi(0xc7);
-	AT45dbxx_Spi(0x94);
-	AT45dbxx_Spi(0x80);
-	AT45dbxx_Spi(0x9a);
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);		
-	AT45dbxx_WaitBusy();	
+    AT45dbxx_Resume();
+    AT45dbxx_WaitBusy();
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(0xc7);
+    AT45dbxx_Spi(0x94);
+    AT45dbxx_Spi(0x80);
+    AT45dbxx_Spi(0x9a);
+    _45DBXX_CS_SET();
+    AT45dbxx_WaitBusy();
 }
 //################################################################################################################
-void 		AT45dbxx_ErasePage(uint16_t page)
+void AT45dbxx_ErasePage(uint16_t page)
 {
-	page = page << AT45dbxx.Shift;
-	AT45dbxx_Resume();
-	AT45dbxx_WaitBusy();
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-  AT45dbxx_Spi(AT45DB_PGERASE);
-  AT45dbxx_Spi((page >> 16) & 0xff);
-  AT45dbxx_Spi((page >> 8) & 0xff);
-	AT45dbxx_Spi(page & 0xff);
-  HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
-	AT45dbxx_WaitBusy();
+    page = page << AT45dbxx.Shift;
+    AT45dbxx_Resume();
+    AT45dbxx_WaitBusy();
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(AT45DB_PGERASE);
+    AT45dbxx_Spi((page >> 16) & 0xff);
+    AT45dbxx_Spi((page >> 8) & 0xff);
+    AT45dbxx_Spi(page & 0xff);
+    _45DBXX_CS_SET();
+    AT45dbxx_WaitBusy();
 }
 //################################################################################################################
-void		AT45dbxx_WritePage(uint8_t	*Data,uint16_t len,uint16_t	page)
+void AT45dbxx_WritePage(uint8_t	*Data, uint16_t len, uint16_t page)
 {
-	page = page << AT45dbxx.Shift;
-	AT45dbxx_Resume();
-	AT45dbxx_WaitBusy();
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-  AT45dbxx_Spi(AT45DB_MNTHRUBF1);
-  AT45dbxx_Spi((page >> 16) & 0xff);
-  AT45dbxx_Spi((page >> 8) & 0xff);
-	AT45dbxx_Spi(page & 0xff);
-	HAL_SPI_Transmit(&_45DBXX_SPI,Data,len,100);
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
-	AT45dbxx_WaitBusy();	
+    page = page << AT45dbxx.Shift;
+    AT45dbxx_Resume();
+    AT45dbxx_WaitBusy();
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(AT45DB_MNTHRUBF1);
+    AT45dbxx_Spi((page >> 16) & 0xff);
+    AT45dbxx_Spi((page >> 8) & 0xff);
+    AT45dbxx_Spi(page & 0xff);
+    HAL_SPI_Transmit(&_45DBXX_SPI,Data,len,100);
+    _45DBXX_CS_SET();
+    AT45dbxx_WaitBusy();
 }
 //################################################################################################################
-void	  AT45dbxx_ReadPage(uint8_t* Data,uint16_t len, uint16_t page)
-{	
-	page = page << AT45dbxx.Shift;
-	if(len > AT45dbxx.PageSize)
-		len = AT45dbxx.PageSize;
-	AT45dbxx_Resume();
-	AT45dbxx_WaitBusy();
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET);
-  AT45dbxx_Spi(AT45DB_RDARRAYHF);
-  AT45dbxx_Spi((page >> 16) & 0xff);
-  AT45dbxx_Spi((page >> 8) & 0xff);
-	AT45dbxx_Spi(page & 0xff);
-	AT45dbxx_Spi(0);			
-	HAL_SPI_Receive(&_45DBXX_SPI,Data,len,100);	
-	HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET);
+void AT45dbxx_ReadPage(uint8_t* Data, uint16_t len, uint16_t page)
+{
+    page = page << AT45dbxx.Shift;
+    if(len > AT45dbxx.PageSize) {
+        len = AT45dbxx.PageSize;
+    }
+    AT45dbxx_Resume();
+    AT45dbxx_WaitBusy();
+    _45DBXX_CS_RESET();
+    AT45dbxx_Spi(AT45DB_RDARRAYHF);
+    AT45dbxx_Spi((page >> 16) & 0xff);
+    AT45dbxx_Spi((page >> 8) & 0xff);
+    AT45dbxx_Spi(page & 0xff);
+    AT45dbxx_Spi(0);
+    HAL_SPI_Receive(&_45DBXX_SPI,Data,len,100);
+    _45DBXX_CS_SET();
 }
 //################################################################################################################
