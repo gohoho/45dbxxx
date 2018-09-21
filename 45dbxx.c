@@ -1,5 +1,5 @@
 #include "45dbxx.h"
-#include "45dbxxConfig.h"
+#include "45dbxx_config.h"
 #include "spi.h"
 #if (_45DBXX_USE_FREERTOS==1)
 #include "cmsis_os.h"
