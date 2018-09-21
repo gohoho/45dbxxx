@@ -98,12 +98,12 @@
 #define AT45DB_SR_PROTECT   (1 << 1) /* Bit 1: PROTECT */
 #define AT45DB_SR_PGSIZE    (1 << 0) /* Bit 0: PAGE_SIZE */
 
-#ifdef _45DBXX_HARDWARE_NSS
-#define _45DBXX_CS_SET()
-#define _45DBXX_CS_RESET()
-#else
+#if _45DBXX_CS_CONTROL == 1
 #define _45DBXX_CS_SET() HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_SET)
 #define _45DBXX_CS_RESET() HAL_GPIO_WritePin(_45DBXX_CS_GPIO,_45DBXX_CS_PIN,GPIO_PIN_RESET)
+#else
+#define _45DBXX_CS_SET()
+#define _45DBXX_CS_RESET()
 #endif
 
 //################################################################################################################
@@ -158,8 +158,21 @@ void AT45dbxx_PowerDown(void)
     _45DBXX_CS_SET();
 }
 //################################################################################################################
+void AT45dbxx_WriteProtection(bool enable)
+{
+    HAL_GPIO_WritePin(_45DBXX_WP_GPIO,_45DBXX_WP_PIN,!enable);
+}
+//################################################################################################################
+void AT45dbxx_Reset(bool enable)
+{
+    HAL_GPIO_WritePin(_45DBXX_RESET_GPIO,_45DBXX_RESET_PIN,!enable);
+}
+//################################################################################################################
 bool AT45dbxx_Init(void)
 {
+    AT45dbxx_Reset(false);
+    AT45dbxx_WriteProtection(false);
+
     _45DBXX_CS_SET();
     while(HAL_GetTick() < 20) {
         _45DBXX_DELAY(10);

@@ -21,4 +21,7 @@ void AT45dbxx_ErasePage(uint16_t page);
 void AT45dbxx_WritePage(uint8_t	*Data, uint16_t len, uint16_t page);
 void AT45dbxx_ReadPage(uint8_t* Data, uint16_t len, uint16_t page);
 
+void AT45dbxx_Resume(void);
+void AT45dbxx_PowerDown(void);
+
 #endif
