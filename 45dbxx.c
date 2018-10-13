@@ -185,6 +185,8 @@ void AT45dbxx_Reset(bool enable)
 //################################################################################################################
 bool AT45dbxx_Init(void)
 {
+    _45DBXX_DELAY(10);
+
     AT45dbxx_Reset(false);
     AT45dbxx_WriteProtection(false);
 
@@ -293,6 +295,8 @@ int AT45dbxx_EraseChip(void)
 //################################################################################################################
 int AT45dbxx_ErasePage(uint16_t page)
 {
+    assert_param(page < AT45dbxx.Pages);
+
     page = page << AT45dbxx.Shift;
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
@@ -310,13 +314,14 @@ int AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_
 {
     assert_param(offset < AT45dbxx.PageSize);
     assert_param(page < AT45dbxx.Pages);
-    assert_param(len <= AT45dbxx.PageSize - offset);
+    assert_param(len <= (AT45dbxx.PageSize - offset));
+
     page = (page << AT45dbxx.Shift) | offset;
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
 
-    AT45dbxx_Spi(AT45DB_MNTHRUBF1);
+    AT45dbxx_Spi(AT45DB_AUTOWRBF1);
     AT45dbxx_Spi((page >> 16) & 0xff);
     AT45dbxx_Spi((page >> 8) & 0xff);
     AT45dbxx_Spi(page & 0xff);
@@ -329,10 +334,10 @@ int AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_
 //################################################################################################################
 int AT45dbxx_ReadPage(uint16_t page, void *data, uint16_t len)
 {
+    assert_param(page < AT45dbxx.Pages);
+    assert_param(len <= AT45dbxx.PageSize);
+
     page = page << AT45dbxx.Shift;
-    if (len > AT45dbxx.PageSize) {
-        len = AT45dbxx.PageSize;
-    }
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
@@ -348,6 +353,9 @@ int AT45dbxx_ReadPage(uint16_t page, void *data, uint16_t len)
 //################################################################################################################
 int AT45dbxx_Write(uint32_t addr, const void *buf, size_t len)
 {
+    assert_param(addr < AT45dbxx.FlashSize);
+    assert_param(len < AT45dbxx.FlashSize);
+
     const uint8_t *external_buffer = (uint8_t *) buf;
 
     // If the addr is not valid:
@@ -397,9 +405,9 @@ int AT45dbxx_Write(uint32_t addr, const void *buf, size_t len)
 //################################################################################################################
 int AT45dbxx_Read(uint32_t addr, void *buf, size_t len)
 {
-    if (len > AT45dbxx.FlashSize) {
-        len = AT45dbxx.FlashSize;
-    }
+    assert_param(len < AT45dbxx.FlashSize);
+    assert_param(addr < AT45dbxx.FlashSize);
+
     unsigned short page_offset = (addr / AT45dbxx.PageSize) << AT45dbxx.Shift;
     unsigned short byte_offset = addr % AT45dbxx.PageSize;
     addr = page_offset | byte_offset;
