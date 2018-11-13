@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 typedef struct
 {
@@ -15,14 +14,12 @@ typedef struct
     uint8_t Shift;
 } AT45dbxx_t;
 
-
 extern AT45dbxx_t AT45dbxx;
-
 
 bool AT45dbxx_Init(void);
 int AT45dbxx_EraseChip(void);
-int AT45dbxx_ErasePage(uint16_t page);
-int AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_t len);
+bool AT45dbxx_ErasePage(uint16_t page);
+bool AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_t len);
 int AT45dbxx_ReadPage(uint16_t page, void *data, uint16_t len);
 
 int AT45dbxx_Write(uint32_t addr, const void *buf, size_t len);

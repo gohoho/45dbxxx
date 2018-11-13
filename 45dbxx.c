@@ -94,13 +94,14 @@
 #define AT45DB_DEVID2_MLCMSK 0xe0 /* Bits 5-7: MLC mask */
 
 /* Status register bit definitions */
-#define AT45DB_SR_RDY (1 << 7) /* Bit 7: RDY/ Not BUSY */
-#define AT45DB_SR_EPE (1 << 5) /* Bit 5: Erase or program error detected*/
-#define AT45DB_SR_SLE (1 << 3) /* Bit 3: Sector Lockdown command is enabled*/
+#define AT45DB_SR_BT1_RDY (1 << 7)     /* Bit 7: RDY/ Not BUSY */
+#define AT45DB_SR_BT1_COMP (1 << 6)    /* Bit 6: COMP */
+#define AT45DB_SR_BT1_PROTECT (1 << 1) /* Bit 1: PROTECT */
+#define AT45DB_SR_BT1_PGSIZE (1 << 0)  /* Bit 0: PAGE_SIZE */
 
-#define AT45DB_SR_COMP (1 << 6)    /* Bit 6: COMP */
-#define AT45DB_SR_PROTECT (1 << 1) /* Bit 1: PROTECT */
-#define AT45DB_SR_PGSIZE (1 << 0)  /* Bit 0: PAGE_SIZE */
+#define AT45DB_SR_BT2_RDY (1 << 7) /* Bit 7: RDY/ Not BUSY */
+#define AT45DB_SR_BT2_EPE (1 << 5) /* Bit 5: Erase or program error detected*/
+#define AT45DB_SR_BT2_SLE (1 << 3) /* Bit 3: Sector Lockdown command is enabled*/
 
 #if _45DBXX_CS_CONTROL == 1
 #else
@@ -138,6 +139,18 @@ uint8_t AT45dbxx_Cmd(uint8_t Data)
     return ret;
 }
 //################################################################################################################
+
+uint16_t AT45dbxx_ReadFullStatus(void)
+{
+    uint16_t status = 0;
+    AT45DBxx_chip_select();
+    AT45dbxx_Spi(AT45DB_RDSR);
+    status = AT45dbxx_Spi(0x00) << 8;
+    status |= AT45dbxx_Spi(0x00);
+    AT45DBxx_chip_release();
+    return status;
+}
+
 uint8_t AT45dbxx_ReadStatus(void)
 {
     uint8_t status = 0;
@@ -150,11 +163,9 @@ uint8_t AT45dbxx_ReadStatus(void)
 //################################################################################################################
 void AT45dbxx_WaitBusy(void)
 {
-    uint8_t status = AT45dbxx_ReadStatus();
-    while ((status & 0x80) == 0) {
+    do {
         _45DBXX_DELAY(1);
-        status = AT45dbxx_ReadStatus();
-    }
+    } while ((AT45dbxx_ReadStatus() & AT45DB_SR_BT1_RDY) == 0);
 }
 //################################################################################################################
 int AT45dbxx_Resume(void)
@@ -194,19 +205,19 @@ bool AT45dbxx_Init(void)
     while (HAL_GetTick() < 20) {
         _45DBXX_DELAY(10);
     }
-    uint8_t Temp0 = 0, Temp1 = 0, Temp2 = 0;
+    uint8_t manufacturer_id, device_id, status;
     AT45DBxx_chip_select();
-    AT45dbxx_Spi(0x9f);
-    Temp0 = AT45dbxx_Spi(0xa5);
-    Temp1 = AT45dbxx_Spi(0xa5);
+    AT45dbxx_Spi(AT45DB_RDDEVID);
+    manufacturer_id = AT45dbxx_Spi(0x0);
+    device_id = AT45dbxx_Spi(0x0);
     AT45DBxx_chip_release();
-    Temp2 = AT45dbxx_ReadStatus();
-    if (Temp0 == 0x1f) {
-        switch (Temp1 & 0x1f) {
-        case 0x03: //	AT45db021
+    status = AT45dbxx_ReadStatus();
+    if (manufacturer_id == AT45DB_MANUFACTURER) {
+        switch (device_id & AT45DB_DEVID1_CAPMSK) {
+        case AT45DB_DEVID1_2MBIT: //	AT45db021
             AT45dbxx.FlashSize_MBit = 2;
             AT45dbxx.Pages = 1024;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 256;
             } else {
@@ -214,10 +225,10 @@ bool AT45dbxx_Init(void)
                 AT45dbxx.PageSize = 264;
             }
             break;
-        case 0x04: //	AT45db041
+        case AT45DB_DEVID1_4MBIT: //	AT45db041
             AT45dbxx.FlashSize_MBit = 4;
             AT45dbxx.Pages = 2048;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 256;
             } else {
@@ -225,10 +236,10 @@ bool AT45dbxx_Init(void)
                 AT45dbxx.PageSize = 264;
             }
             break;
-        case 0x05: //	AT45db081
+        case AT45DB_DEVID1_8MBIT: //	AT45db081
             AT45dbxx.FlashSize_MBit = 8;
             AT45dbxx.Pages = 4096;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 256;
             } else {
@@ -236,10 +247,10 @@ bool AT45dbxx_Init(void)
                 AT45dbxx.PageSize = 264;
             }
             break;
-        case 0x06: //	AT45db161
+        case AT45DB_DEVID1_16MBIT: //	AT45db161
             AT45dbxx.FlashSize_MBit = 16;
             AT45dbxx.Pages = 4096;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 512;
             } else {
@@ -247,10 +258,10 @@ bool AT45dbxx_Init(void)
                 AT45dbxx.PageSize = 528;
             }
             break;
-        case 0x07: //	AT45db321
+        case AT45DB_DEVID1_32MBIT: //	AT45db321
             AT45dbxx.FlashSize_MBit = 32;
             AT45dbxx.Pages = 8192;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 512;
             } else {
@@ -258,10 +269,10 @@ bool AT45dbxx_Init(void)
                 AT45dbxx.PageSize = 528;
             }
             break;
-        case 0x08: //	AT45db641
+        case AT45DB_DEVID1_64MBIT: //	AT45db641
             AT45dbxx.FlashSize_MBit = 64;
             AT45dbxx.Pages = 8192;
-            if (Temp2 & 0x01) {
+            if (status & AT45DB_SR_BT1_PGSIZE) {
                 AT45dbxx.Shift = 0;
                 AT45dbxx.PageSize = 1024;
             } else {
@@ -284,52 +295,60 @@ int AT45dbxx_EraseChip(void)
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
-    AT45dbxx_Spi(0xc7);
-    AT45dbxx_Spi(0x94);
-    AT45dbxx_Spi(0x80);
-    AT45dbxx_Spi(0x9a);
+    AT45dbxx_Spi(AT45DB_CHIPERASE1);
+    AT45dbxx_Spi(AT45DB_CHIPERASE2);
+    AT45dbxx_Spi(AT45DB_CHIPERASE3);
+    AT45dbxx_Spi(AT45DB_CHIPERASE4);
     AT45DBxx_chip_release();
     AT45dbxx_WaitBusy();
     return 0;
 }
 //################################################################################################################
-int AT45dbxx_ErasePage(uint16_t page)
+bool AT45dbxx_ErasePage(uint16_t page)
 {
     assert_param(page < AT45dbxx.Pages);
 
-    page = page << AT45dbxx.Shift;
+    uint32_t addr = page << AT45dbxx.Shift;
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
     AT45dbxx_Spi(AT45DB_PGERASE);
-    AT45dbxx_Spi((page >> 16) & 0xff);
-    AT45dbxx_Spi((page >> 8) & 0xff);
-    AT45dbxx_Spi(page & 0xff);
+    AT45dbxx_Spi((addr >> 16) & 0xff);
+    AT45dbxx_Spi((addr >> 8) & 0xff);
+    AT45dbxx_Spi(addr & 0xff);
     AT45DBxx_chip_release();
     AT45dbxx_WaitBusy();
-    return 0;
+
+    uint16_t status = AT45dbxx_ReadFullStatus() & AT45DB_SR_BT2_EPE;
+    if (status != 0)
+        Error_Handler();
+    return status == 0;
 }
 //################################################################################################################
-int AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_t len)
+bool AT45dbxx_WritePage(uint16_t page, uint16_t offset, const void *data, uint16_t len)
 {
     assert_param(offset < AT45dbxx.PageSize);
     assert_param(page < AT45dbxx.Pages);
     assert_param(len <= (AT45dbxx.PageSize - offset));
 
-    page = (page << AT45dbxx.Shift) | offset;
+    uint32_t addr = (page << AT45dbxx.Shift) | offset;
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
 
     AT45dbxx_Spi(AT45DB_AUTOWRBF1);
-    AT45dbxx_Spi((page >> 16) & 0xff);
-    AT45dbxx_Spi((page >> 8) & 0xff);
-    AT45dbxx_Spi(page & 0xff);
+    AT45dbxx_Spi((addr >> 16) & 0xff);
+    AT45dbxx_Spi((addr >> 8) & 0xff);
+    AT45dbxx_Spi(addr & 0xff);
 
     HAL_StatusTypeDef ret = HAL_SPI_Transmit(&_45DBXX_SPI, (uint8_t *) data, len, 100);
     AT45DBxx_chip_release();
     AT45dbxx_WaitBusy();
-    return -ret;
+
+    uint16_t status = AT45dbxx_ReadFullStatus() & AT45DB_SR_BT2_EPE;
+    if (status != 0)
+        Error_Handler();
+    return (ret == HAL_OK) && (status == 0);
 }
 //################################################################################################################
 int AT45dbxx_ReadPage(uint16_t page, void *data, uint16_t len)
@@ -337,14 +356,14 @@ int AT45dbxx_ReadPage(uint16_t page, void *data, uint16_t len)
     assert_param(page < AT45dbxx.Pages);
     assert_param(len <= AT45dbxx.PageSize);
 
-    page = page << AT45dbxx.Shift;
+    uint32_t addr = page << AT45dbxx.Shift;
     AT45dbxx_Resume();
     AT45dbxx_WaitBusy();
     AT45DBxx_chip_select();
     AT45dbxx_Spi(AT45DB_RDARRAYHF);
-    AT45dbxx_Spi((page >> 16) & 0xff);
-    AT45dbxx_Spi((page >> 8) & 0xff);
-    AT45dbxx_Spi(page & 0xff);
+    AT45dbxx_Spi((addr >> 16) & 0xff);
+    AT45dbxx_Spi((addr >> 8) & 0xff);
+    AT45dbxx_Spi(addr & 0xff);
     AT45dbxx_Spi(0);
     HAL_StatusTypeDef ret = HAL_SPI_Receive(&_45DBXX_SPI, (uint8_t *) data, len, 100);
     AT45DBxx_chip_release();
@@ -388,7 +407,7 @@ int AT45dbxx_Write(uint32_t addr, const void *buf, size_t len)
                                     bytes_remaining);
 
         /* update loop variables upon success otherwise break loop */
-        if (result == 0) {
+        if (result == true) {
             bytes_written += bytes_remaining;
             page_number++;
 
@@ -408,9 +427,9 @@ int AT45dbxx_Read(uint32_t addr, void *buf, size_t len)
     assert_param(len < AT45dbxx.FlashSize);
     assert_param(addr < AT45dbxx.FlashSize);
 
-    unsigned short page_offset = (addr / AT45dbxx.PageSize) << AT45dbxx.Shift;
+    unsigned short page_offset = (addr / AT45dbxx.PageSize);
     unsigned short byte_offset = addr % AT45dbxx.PageSize;
-    addr = page_offset | byte_offset;
+    addr = ((uint32_t) page_offset << AT45dbxx.Shift) | byte_offset;
 
     // Write the offset
     uint8_t read_command[5] = {AT45DB_RDARRAYHF,
